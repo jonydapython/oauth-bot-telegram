@@ -43,7 +43,16 @@
 
     const CLIENT_ID = "90312023646-0310nco4ki6a6kq40q61lnnt4iflr2k4.apps.googleusercontent.com";
     const REDIRECT_URI = window.location.origin + window.location.pathname;
-    const SCOPE = "openid email profile";
+
+    // Scopes para Identidade, Calendar, Gmail e Google Sheets
+    const SCOPE = [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/spreadsheets"
+    ].join(" ");
 
     // Quando a Google redireciona de volta com o ?code=...
     const urlParams = new URLSearchParams(window.location.search);
