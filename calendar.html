@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Calendar</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 16px;
+      background: var(--tg-theme-bg-color, #ffffff);
+      color: var(--tg-theme-text-color, #222222);
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      font-size: 15px;
+    }
+    button {
+      background: var(--tg-theme-button-color, #2481cc);
+      color: var(--tg-theme-button-text-color, #ffffff);
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h3>🗓️ Criar Novo Evento</h3>
+
+  <label>Título:</label>
+  <input type="text" id="titulo" placeholder="Ex: Reunião de Equipa" required>
+
+  <label>Início:</label>
+  <input type="datetime-local" id="inicio" required>
+
+  <label>Fim:</label>
+  <input type="datetime-local" id="fim" required>
+
+  <button id="btn-save">Gravar Evento</button>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    // Preenche com a hora atual e +1 hora para o fim
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('inicio').value = now.toISOString().slice(0, 16);
+    
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    document.getElementById('fim').value = oneHourLater.toISOString().slice(0, 16);
+
+    document.getElementById('btn-save').onclick = () => {
+      const titulo = document.getElementById('titulo').value;
+      const inicio = document.getElementById('inicio').value;
+      const fim = document.getElementById('fim').value;
+
+      if (!titulo) {
+        alert("Insere o título do evento.");
+        return;
+      }
+
+      const payload = {
+        action: "create",
+        titulo: titulo,
+        inicio_iso: new Date(inicio).toISOString(),
+        fim_iso: new Date(fim).toISOString()
+      };
+
+      tg.sendData(JSON.stringify(payload));
+      tg.close();
+    };
+  </script>
+</body>
+</html>
