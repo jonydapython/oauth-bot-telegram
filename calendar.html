@@ -9,8 +9,55 @@
     body {
       font-family: system-ui, sans-serif;
       padding: 16px;
+      margin: 0;
       background: var(--tg-theme-bg-color, #ffffff);
       color: var(--tg-theme-text-color, #222222);
+      box-sizing: border-box;
+    }
+    h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+    /* Área de ScrollView para os Eventos */
+    .events-container {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 20px;
+      background: var(--tg-theme-secondary-bg-color, #f9f9f9);
+    }
+    /* Cartão individual por cada evento */
+    .event-card {
+      background: var(--tg-theme-bg-color, #ffffff);
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .event-card:last-child {
+      margin-bottom: 0;
+    }
+    .event-title {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .event-time {
+      font-size: 12px;
+      color: #666;
+    }
+    .empty-msg {
+      text-align: center;
+      color: #888;
+      font-size: 14px;
+      padding: 16px;
+    }
+    hr {
+      border: 0;
+      border-top: 1px solid #e0e0e0;
+      margin: 20px 0;
     }
     input, button {
       width: 100%;
@@ -31,8 +78,15 @@
   </style>
 </head>
 <body>
-  <h3>🗓️ Criar Novo Evento</h3>
 
+  <h3>📅 Próximos Eventos</h3>
+  <div class="events-container" id="events-list">
+    <div class="empty-msg" id="loading-msg">A carregar eventos...</div>
+  </div>
+
+  <hr>
+
+  <h3>🗓️ Criar Novo Evento</h3>
   <label>Título:</label>
   <input type="text" id="titulo" placeholder="Ex: Reunião de Equipa" required>
 
@@ -49,7 +103,7 @@
     tg.ready();
     tg.expand();
 
-    // Preenche com a hora atual e +1 hora para o fim
+    // 1. Configura os inputs de data com hora atual e +1h
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('inicio').value = now.toISOString().slice(0, 16);
@@ -57,6 +111,50 @@
     const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
     document.getElementById('fim').value = oneHourLater.toISOString().slice(0, 16);
 
+    // 2. Renderiza a lista de eventos recebida
+    function renderEvents(items) {
+      const container = document.getElementById('events-list');
+      container.innerHTML = '';
+
+      if (!items || items.length === 0) {
+        container.innerHTML = '<div class="empty-msg">Nenhum evento encontrado.</div>';
+        return;
+      }
+
+      items.forEach(ev => {
+        const card = document.createElement('div');
+        card.className = 'event-card';
+
+        const rawStart = ev.start?.dateTime || ev.start?.date || '';
+        const rawEnd = ev.end?.dateTime || ev.end?.date || '';
+        
+        const startDate = rawStart ? new Date(rawStart).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
+        const endDate = rawEnd ? new Date(rawEnd).toLocaleString('pt-PT', { timeStyle: 'short' }) : '';
+
+        const timeStr = endDate ? `${startDate} - ${endDate}` : startDate;
+
+        card.innerHTML = `
+          <div class="event-title">${ev.summary || 'Sem título'}</div>
+          <div class="event-time">🕒 ${timeStr}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Lê eventos passados via query param ?events=... (se o bot os enviar ao abrir o URL)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const eventsData = params.get('events');
+      if (eventsData) {
+        renderEvents(JSON.parse(decodeURIComponent(eventsData)));
+      } else {
+        document.getElementById('loading-msg').innerText = 'Sem eventos carregados.';
+      }
+    } catch (e) {
+      document.getElementById('loading-msg').innerText = 'Erro ao processar eventos.';
+    }
+
+    // 3. Submissão do novo evento
     document.getElementById('btn-save').onclick = () => {
       const titulo = document.getElementById('titulo').value;
       const inicio = document.getElementById('inicio').value;
