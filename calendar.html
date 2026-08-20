@@ -3,121 +3,91 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Calendar</title>
+  <title>Próximos Eventos</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       padding: 16px;
       margin: 0;
       background: var(--tg-theme-bg-color, #ffffff);
       color: var(--tg-theme-text-color, #222222);
       box-sizing: border-box;
     }
-    h3 {
-      margin-top: 0;
-      margin-bottom: 12px;
+    .header {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    /* Área de ScrollView para os Eventos */
-    .events-container {
-      max-height: 220px;
-      overflow-y: auto;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      padding: 8px;
-      margin-bottom: 20px;
-      background: var(--tg-theme-secondary-bg-color, #f9f9f9);
+    .events-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-    /* Cartão individual por cada evento */
     .event-card {
-      background: var(--tg-theme-bg-color, #ffffff);
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 10px;
-      margin-bottom: 8px;
-    }
-    .event-card:last-child {
-      margin-bottom: 0;
+      background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+      border-radius: 10px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--tg-theme-button-color, #2481cc);
     }
     .event-title {
-      font-weight: 600;
       font-size: 15px;
-      margin-bottom: 4px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--tg-theme-text-color, #000000);
+      word-break: break-word;
     }
     .event-time {
-      font-size: 12px;
-      color: #666;
+      font-size: 13px;
+      color: var(--tg-theme-hint-color, #707579);
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-    .empty-msg {
+    .empty-state {
       text-align: center;
-      color: #888;
+      color: var(--tg-theme-hint-color, #888888);
+      padding: 40px 16px;
       font-size: 14px;
-      padding: 16px;
-    }
-    hr {
-      border: 0;
-      border-top: 1px solid #e0e0e0;
-      margin: 20px 0;
-    }
-    input, button {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-      font-size: 15px;
-    }
-    button {
-      background: var(--tg-theme-button-color, #2481cc);
-      color: var(--tg-theme-button-text-color, #ffffff);
-      border: none;
-      font-weight: bold;
-      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-  <h3>📅 Próximos Eventos</h3>
-  <div class="events-container" id="events-list">
-    <div class="empty-msg" id="loading-msg">A carregar eventos...</div>
+  <div class="header">📅 Próximos Eventos</div>
+  <div class="events-list" id="events-list">
+    <div class="empty-state" id="status-msg">A carregar eventos...</div>
   </div>
-
-  <hr>
-
-  <h3>🗓️ Criar Novo Evento</h3>
-  <label>Título:</label>
-  <input type="text" id="titulo" placeholder="Ex: Reunião de Equipa" required>
-
-  <label>Início:</label>
-  <input type="datetime-local" id="inicio" required>
-
-  <label>Fim:</label>
-  <input type="datetime-local" id="fim" required>
-
-  <button id="btn-save">Gravar Evento</button>
 
   <script>
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
 
-    // 1. Configura os inputs de data com hora atual e +1h
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('inicio').value = now.toISOString().slice(0, 16);
-    
-    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-    document.getElementById('fim').value = oneHourLater.toISOString().slice(0, 16);
+    function formatDate(isoStr) {
+      if (!isoStr) return '';
+      const date = new Date(isoStr);
+      // Se for apenas data (evento de dia inteiro)
+      if (isoStr.length === 10) {
+        return date.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      return date.toLocaleString('pt-PT', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
 
-    // 2. Renderiza a lista de eventos recebida
     function renderEvents(items) {
       const container = document.getElementById('events-list');
       container.innerHTML = '';
 
       if (!items || items.length === 0) {
-        container.innerHTML = '<div class="empty-msg">Nenhum evento encontrado.</div>';
+        container.innerHTML = '<div class="empty-state">Nenhum evento agendado.</div>';
         return;
       }
 
@@ -125,56 +95,39 @@
         const card = document.createElement('div');
         card.className = 'event-card';
 
-        const rawStart = ev.start?.dateTime || ev.start?.date || '';
-        const rawEnd = ev.end?.dateTime || ev.end?.date || '';
+        const rawStart = ev.start?.dateTime || ev.start?.date;
+        const rawEnd = ev.end?.dateTime || ev.end?.date;
         
-        const startDate = rawStart ? new Date(rawStart).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
-        const endDate = rawEnd ? new Date(rawEnd).toLocaleString('pt-PT', { timeStyle: 'short' }) : '';
+        const startFormatted = formatDate(rawStart);
+        let timeDisplay = startFormatted;
 
-        const timeStr = endDate ? `${startDate} - ${endDate}` : startDate;
+        if (rawEnd && rawEnd !== rawStart) {
+          // Se for no mesmo dia com hora, mostra "14:00 - 15:00"
+          if (rawStart.slice(0, 10) === rawEnd.slice(0, 10) && rawStart.includes('T')) {
+            const endTime = new Date(rawEnd).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+            timeDisplay = `${startFormatted} às ${endTime}`;
+          }
+        }
 
         card.innerHTML = `
           <div class="event-title">${ev.summary || 'Sem título'}</div>
-          <div class="event-time">🕒 ${timeStr}</div>
+          <div class="event-time">🕒 ${timeDisplay}</div>
         `;
         container.appendChild(card);
       });
     }
 
-    // Lê eventos passados via query param ?events=... (se o bot os enviar ao abrir o URL)
     try {
       const params = new URLSearchParams(window.location.search);
       const eventsData = params.get('events');
       if (eventsData) {
         renderEvents(JSON.parse(decodeURIComponent(eventsData)));
       } else {
-        document.getElementById('loading-msg').innerText = 'Sem eventos carregados.';
+        document.getElementById('status-msg').innerText = 'Nenhum evento recebido.';
       }
     } catch (e) {
-      document.getElementById('loading-msg').innerText = 'Erro ao processar eventos.';
+      document.getElementById('status-msg').innerText = 'Erro ao processar lista de eventos.';
     }
-
-    // 3. Submissão do novo evento
-    document.getElementById('btn-save').onclick = () => {
-      const titulo = document.getElementById('titulo').value;
-      const inicio = document.getElementById('inicio').value;
-      const fim = document.getElementById('fim').value;
-
-      if (!titulo) {
-        alert("Insere o título do evento.");
-        return;
-      }
-
-      const payload = {
-        action: "create",
-        titulo: titulo,
-        inicio_iso: new Date(inicio).toISOString(),
-        fim_iso: new Date(fim).toISOString()
-      };
-
-      tg.sendData(JSON.stringify(payload));
-      tg.close();
-    };
   </script>
 </body>
 </html>
