@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Próximos Eventos</title>
+  <title>Google Calendar</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
@@ -14,52 +14,121 @@
       color: var(--tg-theme-text-color, #222222);
       box-sizing: border-box;
     }
-    .header {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .events-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    .events-container {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 20px;
+      background: var(--tg-theme-secondary-bg-color, #f9f9f9);
     }
     .event-card {
-      background: var(--tg-theme-secondary-bg-color, #f4f4f5);
-      border-radius: 10px;
-      padding: 12px 14px;
-      border-left: 4px solid var(--tg-theme-button-color, #2481cc);
+      background: var(--tg-theme-bg-color, #ffffff);
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .event-card:hover {
+      background: #f0f4f8;
     }
     .event-title {
-      font-size: 15px;
       font-weight: 600;
-      margin-bottom: 6px;
-      color: var(--tg-theme-text-color, #000000);
-      word-break: break-word;
+      font-size: 15px;
+      margin-bottom: 4px;
     }
     .event-time {
-      font-size: 13px;
-      color: var(--tg-theme-hint-color, #707579);
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 12px;
+      color: #666;
     }
-    .empty-state {
-      text-align: center;
-      color: var(--tg-theme-hint-color, #888888);
-      padding: 40px 16px;
-      font-size: 14px;
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      font-size: 15px;
+    }
+    .btn-primary {
+      background: var(--tg-theme-button-color, #2481cc);
+      color: var(--tg-theme-button-text-color, #ffffff);
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-danger {
+      background: #e53935;
+      color: #fff;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-secondary {
+      background: #888;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    /* Janela Modal de Edição/Eliminação */
+    #edit-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 16px;
+      box-sizing: border-box;
+      z-index: 100;
+      overflow-y: auto;
+    }
+    .modal-content {
+      background: var(--tg-theme-bg-color, #ffffff);
+      padding: 16px;
+      border-radius: 12px;
+      max-width: 400px;
+      margin: 40px auto;
     }
   </style>
 </head>
 <body>
 
-  <div class="header">📅 Próximos Eventos</div>
-  <div class="events-list" id="events-list">
-    <div class="empty-state" id="status-msg">A carregar eventos...</div>
+  <h3>📅 Próximos Eventos <small style="font-size:12px;color:#888;">(clica para editar)</small></h3>
+  <div class="events-container" id="events-list">
+    <div style="text-align:center;padding:12px;color:#888;">A carregar...</div>
+  </div>
+
+  <hr style="border:0;border-top:1px solid #e0e0e0;margin:20px 0;">
+
+  <h3>🗓️ Criar Novo Evento</h3>
+  <label>Título:</label>
+  <input type="text" id="titulo" placeholder="Ex: Reunião de Equipa">
+  <label>Início:</label>
+  <input type="datetime-local" id="inicio">
+  <label>Fim:</label>
+  <input type="datetime-local" id="fim">
+  <button class="btn-primary" id="btn-save">Gravar Evento</button>
+
+  <!-- Modal de Edição/Eliminação -->
+  <div id="edit-modal">
+    <div class="modal-content">
+      <h3 style="margin-top:0;">✏️ Editar / Eliminar</h3>
+      <input type="hidden" id="edit-id">
+      <input type="hidden" id="edit-cal-id">
+      
+      <label>Título:</label>
+      <input type="text" id="edit-title">
+      <label>Início:</label>
+      <input type="datetime-local" id="edit-start">
+      <label>Fim:</label>
+      <input type="datetime-local" id="edit-end">
+
+      <button class="btn-primary" id="btn-update">Guardar Alterações</button>
+      <button class="btn-danger" id="btn-delete">🗑️ Eliminar Evento</button>
+      <button class="btn-secondary" id="btn-cancel">Cancelar</button>
+    </div>
   </div>
 
   <script>
@@ -67,66 +136,108 @@
     tg.ready();
     tg.expand();
 
-    function formatDate(isoStr) {
-      if (!isoStr) return '';
-      const date = new Date(isoStr);
-      // Se for apenas data (evento de dia inteiro)
-      if (isoStr.length === 10) {
-        return date.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
-      }
-      return date.toLocaleString('pt-PT', {
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    }
+    // Configura horas padrão para criação de novo evento (agora + 1h)
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('inicio').value = now.toISOString().slice(0, 16);
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    document.getElementById('fim').value = oneHourLater.toISOString().slice(0, 16);
+
+    let currentEvents = [];
 
     function renderEvents(items) {
+      currentEvents = items || [];
       const container = document.getElementById('events-list');
       container.innerHTML = '';
 
-      if (!items || items.length === 0) {
-        container.innerHTML = '<div class="empty-state">Nenhum evento agendado.</div>';
+      if (currentEvents.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:12px;color:#888;">Nenhum evento agendado.</div>';
         return;
       }
 
-      items.forEach(ev => {
+      currentEvents.forEach((ev, idx) => {
         const card = document.createElement('div');
         card.className = 'event-card';
+        card.onclick = () => openEditModal(idx);
 
-        const rawStart = ev.start?.dateTime || ev.start?.date;
-        const rawEnd = ev.end?.dateTime || ev.end?.date;
-        
-        const startFormatted = formatDate(rawStart);
-        let timeDisplay = startFormatted;
-
-        if (rawEnd && rawEnd !== rawStart) {
-          // Se for no mesmo dia com hora, mostra "14:00 - 15:00"
-          if (rawStart.slice(0, 10) === rawEnd.slice(0, 10) && rawStart.includes('T')) {
-            const endTime = new Date(rawEnd).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-            timeDisplay = `${startFormatted} às ${endTime}`;
-          }
-        }
-
+        const startStr = ev.start ? new Date(ev.start).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
         card.innerHTML = `
           <div class="event-title">${ev.summary || 'Sem título'}</div>
-          <div class="event-time">🕒 ${timeDisplay}</div>
+          <div class="event-time">🕒 ${startStr}</div>
         `;
         container.appendChild(card);
       });
     }
 
+    function openEditModal(idx) {
+      const ev = currentEvents[idx];
+      document.getElementById('edit-id').value = ev.id;
+      document.getElementById('edit-cal-id').value = ev.calId;
+      document.getElementById('edit-title').value = ev.summary || '';
+      
+      if (ev.start) {
+        const s = new Date(ev.start);
+        s.setMinutes(s.getMinutes() - s.getTimezoneOffset());
+        document.getElementById('edit-start').value = s.toISOString().slice(0, 16);
+      }
+      if (ev.end) {
+        const e = new Date(ev.end);
+        e.setMinutes(e.getMinutes() - e.getTimezoneOffset());
+        document.getElementById('edit-end').value = e.toISOString().slice(0, 16);
+      }
+      document.getElementById('edit-modal').style.display = 'block';
+    }
+
+    document.getElementById('btn-cancel').onclick = () => {
+      document.getElementById('edit-modal').style.display = 'none';
+    };
+
+    // 1. Criar Evento
+    document.getElementById('btn-save').onclick = () => {
+      const payload = {
+        action: "create",
+        summary: document.getElementById('titulo').value || "Novo Evento",
+        start: new Date(document.getElementById('inicio').value).toISOString(),
+        end: new Date(document.getElementById('fim').value).toISOString()
+      };
+      tg.sendData(JSON.stringify(payload));
+      tg.close();
+    };
+
+    // 2. Atualizar Evento
+    document.getElementById('btn-update').onclick = () => {
+      const payload = {
+        action: "update",
+        event_id: document.getElementById('edit-id').value,
+        calendar_id: document.getElementById('edit-cal-id').value,
+        summary: document.getElementById('edit-title').value || "Sem título",
+        start: new Date(document.getElementById('edit-start').value).toISOString(),
+        end: new Date(document.getElementById('edit-end').value).toISOString()
+      };
+      tg.sendData(JSON.stringify(payload));
+      tg.close();
+    };
+
+    // 3. Eliminar Evento
+    document.getElementById('btn-delete').onclick = () => {
+      if (confirm("Tens a certeza que queres eliminar este evento?")) {
+        const payload = {
+          action: "delete",
+          event_id: document.getElementById('edit-id').value,
+          calendar_id: document.getElementById('edit-cal-id').value
+        };
+        tg.sendData(JSON.stringify(payload));
+        tg.close();
+      }
+    };
+
+    // Carregar eventos passados por query string
     try {
       const params = new URLSearchParams(window.location.search);
-      const eventsData = params.get('events');
-      if (eventsData) {
-        renderEvents(JSON.parse(decodeURIComponent(eventsData)));
-      } else {
-        document.getElementById('status-msg').innerText = 'Nenhum evento recebido.';
-      }
+      const data = params.get('events');
+      if (data) renderEvents(JSON.parse(decodeURIComponent(data)));
     } catch (e) {
-      document.getElementById('status-msg').innerText = 'Erro ao processar lista de eventos.';
+      document.getElementById('events-list').innerHTML = '<div style="text-align:center;color:red;">Erro ao carregar dados.</div>';
     }
   </script>
 </body>
